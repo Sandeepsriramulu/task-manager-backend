@@ -5,49 +5,70 @@ pipeline {
         maven 'Maven'
     }
 
+    environment {
+        APP = 'task-manager-backend'
+    }
+
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+    }
+
     stages {
+
         stage('Checkout') {
             steps {
-                echo 'Checking out source code...'
                 checkout scm
+                echo "Building ${APP} — Branch: ${env.BRANCH_NAME ?: 'main'}"
             }
         }
 
         stage('Build') {
             steps {
-                echo 'Building the application...'
-                sh 'mvn clean package -DskipTests'
-                echo 'Build complete!'
+                sh 'mvn clean compile -DskipTests'
+                echo 'Compilation successful'
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running tests...'
                 sh 'mvn test'
-                echo 'All tests passed!'
+            }
+
+            post {
+                always {
+                    junit allowEmptyResults: true,
+                          testResults: 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                sh 'mvn package -DskipTests'
+                echo 'JAR created in target/'
             }
         }
 
         stage('Archive') {
             steps {
-                echo 'Archiving build artifacts...'
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                archiveArtifacts artifacts: 'target/*.jar',
+                                  fingerprint: true
             }
         }
     }
 
     post {
         success {
-            echo 'Pipeline completed successfully!'
+            echo 'Pipeline SUCCESS — artifact ready!'
         }
 
         failure {
-            echo 'Pipeline FAILED! Check the logs above.'
+            echo 'Pipeline FAILED'
         }
 
         always {
-            echo "Build #${env.BUILD_NUMBER} finished."
+            cleanWs()
         }
     }
 }
