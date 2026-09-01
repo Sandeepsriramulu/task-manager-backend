@@ -8,6 +8,6 @@ public class FailingTest {
 
     @Test
     void thisWillFail() {
-        assertEquals(1, 2, "Intentional failure for Jenkins demo");
+        assertEquals(1, 1, "Intentional failure for Jenkins demo");
     }
 }
