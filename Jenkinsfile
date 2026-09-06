@@ -1,17 +1,10 @@
 pipeline {
+
     agent any
 
-    tools {
-        maven 'Maven'
-    }
-
     environment {
-        APP = 'task-manager-backend'
-    }
-
-    options {
-        timeout(time: 15, unit: 'MINUTES')
-        buildDiscarder(logRotator(numToKeepStr: '5'))
+        DOCKER_IMAGE = 'ballasandeep17/task-manager-backend'
+        DOCKER_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
@@ -19,67 +12,48 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                echo "Building ${APP} — Branch: ${env.BRANCH_NAME ?: 'main'}"
             }
         }
 
         stage('Build') {
             steps {
-                sh 'mvn clean compile -DskipTests'
-                echo 'Compilation successful'
+                sh 'mvn clean package -DskipTests'
             }
         }
 
-        stage('Quality') {
-            parallel {
-
-                stage('Unit Tests') {
-                    steps {
-                        sh 'mvn test'
-                    }
-
-                    post {
-                        always {
-                            junit allowEmptyResults: true,
-                                  testResults: 'target/surefire-reports/*.xml'
-                        }
-                    }
-                }
-
-                stage('Compile Check') {
-                    steps {
-                        sh 'mvn compile -DskipTests'
-                        echo 'Code compiles cleanly'
-                    }
-                }
-            }
-        }
-
-        stage('Package') {
+        stage('Test') {
             steps {
-                sh 'mvn package -DskipTests'
-                echo 'JAR created in target/'
+                sh 'mvn test'
             }
         }
 
-        stage('Archive') {
+        stage('Docker Build') {
             steps {
-                archiveArtifacts artifacts: 'target/*.jar',
-                                  fingerprint: true
+                sh 'docker build -t $DOCKER_IMAGE:$DOCKER_TAG .'
+                sh 'docker tag $DOCKER_IMAGE:$DOCKER_TAG $DOCKER_IMAGE:latest'
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin'
+                    sh 'docker push $DOCKER_IMAGE:$DOCKER_TAG'
+                    sh 'docker push $DOCKER_IMAGE:latest'
+                }
             }
         }
     }
 
     post {
-        success {
-            echo 'Pipeline SUCCESS — artifact ready!'
-        }
-
-        failure {
-            echo 'Pipeline FAILED'
-        }
-
         always {
+            sh 'docker logout || true'
             cleanWs()
         }
     }
