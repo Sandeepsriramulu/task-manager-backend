@@ -1,0 +1,45 @@
+services:
+
+  database:
+    image: mysql:8.0
+    container_name: taskdb-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: taskdb
+      MYSQL_USER: taskapp
+      MYSQL_PASSWORD: taskapp123
+      MYSQL_ROOT_PASSWORD: root123
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ${DOCKER_IMAGE_BE:-taskmanager/backend}:${DOCKER_TAG:-latest}
+    container_name: task-manager-backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://database:3306/taskdb?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: taskapp
+      SPRING_DATASOURCE_PASSWORD: taskapp123
+    ports:
+      - "8080:8080"
+    depends_on:
+      database:
+        condition: service_healthy
+
+  frontend:
+    image: ${DOCKER_IMAGE_FE:-taskmanager/frontend}:${DOCKER_TAG:-latest}
+    container_name: task-manager-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:

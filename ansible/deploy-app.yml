@@ -1,0 +1,76 @@
+---
+- name: Deploy Task Manager Application
+  hosts: appservers
+  become: true
+
+  vars:
+    docker_image_be: "taskmanager/backend"
+    docker_image_fe: "taskmanager/frontend"
+    docker_tag: "latest"
+
+  tasks:
+
+    - name: Install Docker
+      ansible.builtin.dnf:
+        name: docker
+        state: present
+
+    - name: Start Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Pull backend image
+      community.docker.docker_image:
+        name: "{{ docker_image_be }}:{{ docker_tag }}"
+        source: pull
+
+    - name: Pull frontend image
+      community.docker.docker_image:
+        name: "{{ docker_image_fe }}:{{ docker_tag }}"
+        source: pull
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: /opt/task-manager
+        state: directory
+        mode: "0755"
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose.yml
+        dest: /opt/task-manager/docker-compose.yml
+        mode: "0644"
+
+    - name: Create scripts directory
+      ansible.builtin.file:
+        path: /opt/task-manager/scripts
+        state: directory
+        mode: "0755"
+
+    - name: Copy database seed script
+      ansible.builtin.copy:
+        src: ../scripts/seed-data.sql
+        dest: /opt/task-manager/scripts/seed-data.sql
+        mode: "0644"
+
+    - name: Start application
+      ansible.builtin.command:
+        cmd: >
+          docker compose
+          -f /opt/task-manager/docker-compose.yml
+          up -d
+      environment:
+        DOCKER_IMAGE_BE: "{{ docker_image_be }}"
+        DOCKER_IMAGE_FE: "{{ docker_image_fe }}"
+        DOCKER_TAG: "{{ docker_tag }}"
+
+    - name: Wait for backend
+      ansible.builtin.uri:
+        url: http://localhost:8080/api/tasks/health
+        status_code: 200
+      register: health_check
+      retries: 12
+      delay: 10
+      until: health_check.status == 200
