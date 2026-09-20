@@ -4,12 +4,11 @@
   become: true
 
   vars:
-    docker_image_be: "taskmanager/backend"
-    docker_image_fe: "taskmanager/frontend"
+    docker_image_be: "ballasandeep17/task-manager-backend"
+    docker_image_fe: "ballasandeep17/task-manager-frontend"
     docker_tag: "latest"
 
   tasks:
-
     - name: Install Docker
       ansible.builtin.dnf:
         name: docker
